@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KHOTI Simple Assistant</title>
+    <style>
+        /* Basic styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #mainScreen {
+            display: none;
+            height: 100vh;
+            padding: 60px 20px 80px;
+            overflow-y: auto;
+        }
+
+        /* Splash screen */
+        #splashScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .splash-title {
+            font-size: 48px;
+            color: #00ff88;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        /* Status bar */
+        #statusBar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 15px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        /* Mic button */
+        #micButton {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #00ff88;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 10;
+            transition: transform 0.2s;
+        }
+
+        #micButton:active {
+            transform: scale(0.95);
+        }
+
+        .listening {
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Commands list */
+        .command {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        /* History */
+        #history {
+            margin-top: 20px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .history-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            font-size: 14px;
+            animation: slideIn 0.3s ease;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-20px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splashScreen">
+        <div class="splash-title">KHOTI</div>
+        <p>Your Voice Assistant</p>
+        <p>Time: 2025-03-23 11:44:29</p>
+        <p>User: ashupndit</p>
+    </div>
+
+    <!-- Status Bar -->
+    <div id="statusBar">Say "Hey KHOTI" to start</div>
+
+    <!-- Main Screen -->
+    <div id="mainScreen">
+        <!-- Commands List -->
+        <div class="command">🗣️ Say "Hey KHOTI" to wake me up</div>
+        <div class="command">📞 "Call [name]" - Make phone calls</div>
+        <div class="command">✉️ "Message [name] [text]" - Send messages</div>
+        <div class="command">📱 "Open [app]" - Launch applications</div>
+        <div class="command">🔊 "Volume up/down" - Control volume</div>
+        <div class="command">💡 "Brightness high/low" - Control brightness</div>
+        <div class="command">📷 "Open camera" - Launch camera</div>
+        <div class="command">📍 "Where am I" - Get location</div>
+
+        <!-- Command History -->
+        <div id="history"></div>
+    </div>
+
+    <!-- Mic Button -->
+    <div id="micButton">🎤</div>
+
+    <script>
+        class KhotiAssistant {
+            constructor() {
+                this.isListening = false;
+                this.isAwaitingCommand = false;
+                this.setupUI();
+                this.initializeSpeechRecognition();
+            }
+
+            setupUI() {
+                // Hide splash screen after 3 seconds
+                setTimeout(() => {
+                    document.getElementById('splashScreen').style.display = 'none';
+                    document.getElementById('mainScreen').style.display = 'block';
+                }, 3000);
+
+                // Setup mic button
+                document.getElementById('micButton').onclick = () => this.toggleListening();
+            }
+
+            initializeSpeechRecognition() {
+                if ('webkitSpeechRecognition' in window) {
+                    this.recognition = new webkitSpeechRecognition();
+                    this.recognition.continuous = true;
+                    this.recognition.interimResults = false;
+
+                    this.recognition.onstart = () => {
+                        this.updateStatus('Listening...');
+                        document.getElementById('micButton').classList.add('listening');
+                    };
+
+                    this.recognition.onend = () => {
+                        if (this.isListening) {
+                            this.recognition.start();
+                        } else {
+                            document.getElementById('micButton').classList.remove('listening');
+                        }
+                    };
+
+                    this.recognition.onresult = (event) => {
+                        const text = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                        this.handleVoiceInput(text);
+                    };
+
+                    this.recognition.onerror = (event) => {
+                        this.logToHistory('Error: ' + event.error);
+                    };
+                }
+            }
+
+            toggleListening() {
+                if (this.isListening) {
+                    this.stopListening();
+                } else {
+                    this.startListening();
+                }
+            }
+
+            startListening() {
+                if (this.recognition) {
+                    this.isListening = true;
+                    this.recognition.start();
+                }
+            }
+
+            stopListening() {
+                if (this.recognition) {
+                    this.isListening = false;
+                    this.recognition.stop();
+                    this.updateStatus('Click mic to start');
+                }
+            }
+
+            handleVoiceInput(text) {
+                this.logToHistory(`Heard: ${text}`);
+
+                if (text.includes('hey khoti')) {
+                    this.isAwaitingCommand = true;
+                    this.speak('How can I help?');
+                    return;
+                }
+
+                if (!this.isAwaitingCommand) return;
+
+                // Process commands
+                if (text.includes('call')) {
+                    const name = text.split('call ')[1];
+                    this.makeCall(name);
+                }
+                else if (text.includes('message')) {
+                    const [name, message] = text.split('message ')[1].split(' saying ');
+                    this.sendMessage(name, message);
+                }
+                else if (text.includes('open')) {
+                    const app = text.split('open ')[1];
+                    this.openApp(app);
+                }
+                else if (text.includes('volume')) {
+                    const isUp = text.includes('up');
+                    this.setVolume(isUp ? 1 : -1);
+                }
+                else if (text.includes('brightness')) {
+                    const isHigh = text.includes('high');
+                    this.setBrightness(isHigh ? 255 : 50);
+                }
+                else if (text.includes('camera')) {
+                    this.openCamera();
+                }
+                else if (text.includes('where am i')) {
+                    this.getLocation();
+                }
+
+                this.isAwaitingCommand = false;
+            }
+
+            // Command handlers
+            makeCall(name) {
+                try {
+                    Android.makeCall(name);
+                    this.speak(`Calling ${name}`);
+                } catch (e) {
+                    this.speak('Sorry, I cannot make the call');
+                }
+            }
+
+            sendMessage(name, message) {
+                try {
+                    Android.sendSMS(name, message);
+                    this.speak(`Sending message to ${name}`);
+                } catch (e) {
+                    this.speak('Sorry, I cannot send the message');
+                }
+            }
+
+            openApp(app) {
+                try {
+                    Android.openApp(app);
+                    this.speak(`Opening ${app}`);
+                } catch (e) {
+                    this.speak('Sorry, I cannot open the app');
+                }
+            }
+
+            setVolume(direction) {
+                try {
+                    Android.setVolume(direction);
+                    this.speak(direction > 0 ? 'Volume up' : 'Volume down');
+                } catch (e) {
+                    this.speak('Sorry, I cannot control the volume');
+                }
+            }
+
+            setBrightness(level) {
+                try {
+                    Android.setBrightness(level);
+                    this.speak('Adjusting brightness');
+                } catch (e) {
+                    this.speak('Sorry, I cannot adjust brightness');
+                }
+            }
+
+            openCamera() {
+                try {
+                    Android.openCamera();
+                    this.speak('Opening camera');
+                } catch (e) {
+                    this.speak('Sorry, I cannot open the camera');
+                }
+            }
+
+            getLocation() {
+                try {
+                    Android.getLocation();
+                    this.speak('Getting your location');
+                } catch (e) {
+                    this.speak('Sorry, I cannot access location');
+                }
+            }
+
+            // Utility functions
+            speak(text) {
+                try {
+                    Android.speakText(text);
+                    this.logToHistory(`KHOTI: ${text}`);
+                } catch (e) {
+                    console.log('Speech error:', e);
+                }
+            }
+
+            updateStatus(text) {
+                document.getElementById('statusBar').textContent = text;
+            }
+
+            logToHistory(text) {
+                const history = document.getElementById('history');
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                item.textContent = `${new Date().toLocaleTimeString()} - ${text}`;
+                history.insertBefore(item, history.firstChild);
+            }
+        }
+
+        // Start the assistant when page loads
+        window.onload = () => new KhotiAssistant();
+    </script>
+</body>
+</html>
